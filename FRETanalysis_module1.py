@@ -70,22 +70,60 @@ class Module_FRETanalysis(tk.Tk):
         step6Button = tk.Button(self,text=u"Step6: Bleedthrough Correction", command=self.step6Button_Click)
         step6Button.grid(row=6, column=0, columnspan=150, sticky='W')
 
+        step7Button = tk.Button(self,text=u"Step7: Update paramerters", command=self.step7Button_Click)
+        step7Button.grid(row=7, column=0, columnspan=150, sticky='W')
 
         self.testStr = tk.StringVar()
         testLabel = tk.Label(self, textvariable=self.testStr, fg="red")
-        testLabel.grid(row=7, column=0, sticky='W')
+        testLabel.grid(row=8, column=0, sticky='W')
         self.testStr.set(u"Start the procedure by following the steps!")
 
         self.deltaStr = tk.StringVar()
         deltaLabel = tk.Label(self, textvariable=self.deltaStr, fg="blue")
-        deltaLabel.grid(row=8, column=0, sticky='W')
+        deltaLabel.grid(row=9, column=0, sticky='W')
         self.deltaStr.set(u"delta = ")
 
         self.alphaStr = tk.StringVar()
         alphaLabel = tk.Label(self, textvariable=self.alphaStr, fg="blue")
-        alphaLabel.grid(row=9, column=0, sticky='W')
+        alphaLabel.grid(row=10, column=0, sticky='W')
         self.alphaStr.set(u"alpha = ")
-              
+
+        para1Label = tk.Label(self, text="Q_D")
+        para1Label.grid(row=11, column=0, columnspan=50, sticky='W')
+        self.paraStr_QD = tk.StringVar()
+        self.QDEntry = tk.Entry(self,textvariable=self.paraStr_QD)
+        self.QDEntry.grid(row=11, column=51, columnspan=50, sticky='W')
+        self.paraStr_QD.set(u"0.85")
+
+        para2Label = tk.Label(self, text="Gain Ratio")
+        para2Label.grid(row=12, column=0, columnspan=50, sticky='W')
+        self.paraStr_gainratio = tk.StringVar()
+        self.gainratioEntry = tk.Entry(self,textvariable=self.paraStr_gainratio)
+        self.gainratioEntry.grid(row=12, column=51, columnspan=50, sticky='W')
+        self.paraStr_gainratio.set(u"1.15")
+
+        para3Label = tk.Label(self, text="Sigma of donor")
+        para3Label.grid(row=13, column=0, columnspan=50, sticky='W')
+        self.paraStr_sigmadonor = tk.StringVar()
+        self.sigmadonorEntry = tk.Entry(self,textvariable=self.paraStr_sigmadonor)
+        self.sigmadonorEntry.grid(row=13, column=51, columnspan=50, sticky='W')
+        self.paraStr_sigmadonor.set(u"9")
+
+        para4Label = tk.Label(self, text="Sigma of acceptor")
+        para4Label.grid(row=14, column=0, columnspan=50, sticky='W')
+        self.paraStr_sigmaacceptor = tk.StringVar()
+        self.sigmaacceptorEntry = tk.Entry(self,textvariable=self.paraStr_sigmaacceptor)
+        self.sigmaacceptorEntry.grid(row=14, column=51, columnspan=50, sticky='W')
+        self.paraStr_sigmaacceptor.set(u"7.2")
+
+        para5Label = tk.Label(self, text="Sigma of fret")
+        para5Label.grid(row=15, column=0, columnspan=50, sticky='W')
+        self.paraStr_sigmafret = tk.StringVar()
+        self.sigmafretEntry = tk.Entry(self,textvariable=self.paraStr_sigmafret)
+        self.sigmafretEntry.grid(row=15, column=51, columnspan=50, sticky='W')
+        self.paraStr_sigmafret.set(u"7.2")
+
+
         self.grid_columnconfigure(0, weight=1)
         self.update()
         self.geometry(self.geometry())       
@@ -97,6 +135,7 @@ class Module_FRETanalysis(tk.Tk):
         self.step3Button_Checked = False
         self.step4Button_Checked = False
         self.step5Button_Checked = False
+        self.step6Button_Checked = False
         self.haveFinished = np.array([0,0,0,0])
                 
     def pathEntry_Enter(self, event):
@@ -255,8 +294,8 @@ class Module_FRETanalysis(tk.Tk):
                     sumdBt = sumdBt + temp
                     N = N + 1
                     
-            delta = sumdBt/N*100;
-            self.deltaStr.set(u"delta = %2.1f" %delta)
+            self.delta = sumdBt/N*100;
+            self.deltaStr.set(u"delta = %2.1f" %self.delta)
             
             abkgdArray = abtArray[abkgdrectArray[1]:abkgdrectArray[3],abkgdrectArray[0]:abkgdrectArray[2]]
             maBkgd = np.median(abkgdArray)
@@ -274,13 +313,26 @@ class Module_FRETanalysis(tk.Tk):
                     sumdBt = sumdBt + temp
                     N = N + 1
                     
-            alpha = sumdBt/N*100;
-            self.alphaStr.set(u"alpha = %2.1f" %alpha)
+            self.alpha = sumdBt/N*100;
+            self.alphaStr.set(u"alpha = %2.1f" %self.alpha)
 
+            self.step6Button_Checked = True
 
+    def step7Button_Click(self):
+        if (self.step6Button_Checked==True):
+            Q_D = np.float_(self.paraStr_QD.get())
+            gainDARatio = np.float_(self.paraStr_gainratio.get())
+            donorSigma = np.float_(self.paraStr_sigmadonor.get())
+            acceptorSigma = np.float_(self.paraStr_sigmaacceptor.get())
+            fretSigma = np.float_(self.paraStr_sigmafret.get())
             textFile = open(os.path.abspath(self.imgpath) + "/Parameter.txt", "w")
-            textFile.write("delta: %2.1f\n" %delta)
-            textFile.write("alpha: %2.1f" %alpha)
+            textFile.write("delta: %2.1f\n" %self.delta)
+            textFile.write("alpha: %2.1f\n" %self.alpha)
+            textFile.write("Q_D: %2.2f\n" %Q_D)
+            textFile.write("GainRatio: %2.2f\n" %gainDARatio)
+            textFile.write("SigmaDonor: %2.2f\n" %donorSigma)
+            textFile.write("SigmaAcceptor: %2.2f\n" %acceptorSigma)
+            textFile.write("SigmaFRET: %2.2f\n" %fretSigma)
             textFile.close()
 
     

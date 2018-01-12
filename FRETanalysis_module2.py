@@ -4,9 +4,12 @@ import os.path
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import cv2
 from scipy.optimize import curve_fit
 from scipy import exp
+from astropy.stats import median_absolute_deviation
+from astropy.table import Table, Column
 
 
 class Module_FRETanalysis(tk.Tk):
@@ -52,28 +55,88 @@ class Module_FRETanalysis(tk.Tk):
 
         step3Button = tk.Button(self,text=u"Step3: Background Substraction and ROI Selection", command=self.step3Button_Click)
         step3Button.grid(row=3, column=0, columnspan=150, sticky='W')
+
+        neuronnameLabel = tk.Label(self, text="Name of the node: ")
+        neuronnameLabel.grid(row=3, column=151, columnspan=100, sticky='W')
+        
+        self.neuronnameStr = tk.StringVar()
+        self.neuronnameEntry = tk.Entry(self,textvariable=self.neuronnameStr)
+        self.neuronnameEntry.grid(row=3, column=251, columnspan=150, sticky='W')
+        self.neuronnameStr.set(u"neuron")
         
 
         step4Button = tk.Button(self,text=u"Step4: FRET Efficiency and Uncertainty Calculation", command=self.step4Button_Click)
         step4Button.grid(row=4, column=0, columnspan=150, sticky='W')
-        
+
+        step5Button = tk.Button(self,text=u"Step5: Characterization of FRET", command=self.step5Button_Click)
+        step5Button.grid(row=5, column=0, columnspan=150, sticky='W')
 
         self.testStr1 = tk.StringVar()
         testLabel1 = tk.Label(self, textvariable=self.testStr1, fg="red")
-        testLabel1.grid(row=5, column=0, sticky='W')
+        testLabel1.grid(row=6, column=0, sticky='W')
         self.testStr1.set(u"Start the procedure by following the steps!")
-        
+
+
+        resulttitleLabel = tk.Label(self, text="Results")
+        resulttitleLabel.grid(row=0, column=500, columnspan=100, sticky='W')
+
+        result1ttLabel = tk.Label(self, text="Median of the FRET Efficiency:")
+        result1ttLabel.grid(row=1, column=401, columnspan=99, sticky='W')
+        self.result1Str = tk.StringVar()
+        result1Label = tk.Label(self, textvariable=self.result1Str, fg="blue")
+        result1Label.grid(row=1, column=500, columnspan=100, sticky='W')
+        self.result1Str.set(u"")
+
+        result2ttLabel = tk.Label(self, text="Average of the FRET Efficiency:")
+        result2ttLabel.grid(row=2, column=401, columnspan=99, sticky='W')
+        self.result2Str = tk.StringVar()
+        result2Label = tk.Label(self, textvariable=self.result2Str, fg="blue")
+        result2Label.grid(row=2, column=500, columnspan=100, sticky='W')
+        self.result2Str.set(u"")
+
+        result3ttLabel = tk.Label(self, text="/total # of pixel in ROI")
+        result3ttLabel.grid(row=3, column=401, columnspan=99, sticky='W')
+        self.result3Str = tk.StringVar()
+        result3Label = tk.Label(self, textvariable=self.result3Str, fg="blue")
+        result3Label.grid(row=3, column=500, columnspan=100, sticky='W')
+        self.result3Str.set(u"")
+
+        result4ttLabel = tk.Label(self, text="# of uncertain pixels")
+        result4ttLabel.grid(row=4, column=401, columnspan=99, sticky='W')
+        self.result4Str = tk.StringVar()
+        result4Label = tk.Label(self, textvariable=self.result4Str, fg="blue")
+        result4Label.grid(row=4, column=500, columnspan=100, sticky='W')
+        self.result4Str.set(u"")
+
+        result5ttLabel = tk.Label(self, text="Average uncertainty:")
+        result5ttLabel.grid(row=5, column=401, columnspan=99, sticky='W')
+        self.result5Str = tk.StringVar()
+        result5Label = tk.Label(self, textvariable=self.result5Str, fg="blue")
+        result5Label.grid(row=5, column=500, columnspan=100, sticky='W')
+        self.result5Str.set(u"")
+
+        result6ttLabel = tk.Label(self, text="# of pixels in final quantification")
+        result6ttLabel.grid(row=6, column=401, columnspan=99, sticky='W')
+        self.result6Str = tk.StringVar()
+        result6Label = tk.Label(self, textvariable=self.result6Str, fg="blue")
+        result6Label.grid(row=6, column=500, columnspan=100, sticky='W')
+        self.result6Str.set(u"")
+
                       
         self.grid_columnconfigure(0, weight=1)
         self.update()
-        self.geometry(self.geometry())       
+        self.geometry(self.geometry())
+        self.neuronname = "neuron"
         self.pathEntry.focus_set()
         self.pathEntry.selection_range(0, tk.END)
+        self.neuronnameEntry.focus_set()
+        self.neuronnameEntry.selection_range(0, tk.END)
 
         self.step1Button_Clicked = False
         self.step2Button_Checked = False
         self.step3Button_Checked = False
         self.step4Button_Checked = False
+        self.step5Button_Checked = False
 
         self.drawNpt = 0
         self.finishDrawing = False
@@ -83,6 +146,11 @@ class Module_FRETanalysis(tk.Tk):
         self.imgpath = self.pathStr.get()
         self.pathEntry.focus_set()
         self.pathEntry.selection_range(0, tk.END)
+
+    def neuronnameEntry_Enter(self, event):
+    	self.neuronname = self.neuronnameStr.get()
+    	self.neuronnameEntry.focus_set()
+    	self.neuronnameEntry.selection_range(9, tk.END)
     
     def getpathButton_Click(self):
         imgfullpath = tkFileDialog.askopenfilename(initialdir = "/",title = "Select file",
@@ -111,32 +179,31 @@ class Module_FRETanalysis(tk.Tk):
                 imgfig1.canvas.set_window_title('Original Images')
                 
                
-                im1 = axes1[0].imshow(self.donorArray, cmap = 'nipy_spectral')
-                cbar1 = imgfig1.colorbar(im1, ax=axes1[0],orientation='horizontal')
-                cbar1.ax.set_xticklabels(cbar1.ax.get_xticklabels(),rotation=90)
+                im11 = axes1[0].imshow(self.donorArray, cmap = 'nipy_spectral')
+                cbar11 = imgfig1.colorbar(im11, ax=axes1[0],orientation='horizontal')
+                cbar11.ax.set_xticklabels(cbar11.ax.get_xticklabels(),rotation=90)
                 axes1[0].set_title('Donor Channel')
                 axes1[0].tick_params(axis='both', which='both',
                             bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
                 
                 
                 
-                im2 = axes1[1].imshow(self.acceptorArray, cmap = 'nipy_spectral')
-                cbar2 = imgfig1.colorbar(im2, ax=axes1[1],orientation='horizontal')
-                cbar2.ax.set_xticklabels(cbar2.ax.get_xticklabels(),rotation=90)
+                im12 = axes1[1].imshow(self.acceptorArray, cmap = 'nipy_spectral')
+                cbar12 = imgfig1.colorbar(im12, ax=axes1[1],orientation='horizontal')
+                cbar12.ax.set_xticklabels(cbar12.ax.get_xticklabels(),rotation=90)
                 axes1[1].set_title('Acceptor Channel')
                 axes1[1].tick_params(axis='both', which='both',
                             bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
                 
                 
-                im3 = axes1[2].imshow(self.fretArray, cmap = 'nipy_spectral')
-                cbar3 = imgfig1.colorbar(im3, ax=axes1[2],orientation='horizontal')
-                cbar3.ax.set_xticklabels(cbar3.ax.get_xticklabels(),rotation=90)
+                im13 = axes1[2].imshow(self.fretArray, cmap = 'nipy_spectral')
+                cbar13 = imgfig1.colorbar(im13, ax=axes1[2],orientation='horizontal')
+                cbar13.ax.set_xticklabels(cbar13.ax.get_xticklabels(),rotation=90)
                 axes1[2].set_title('FRET Channel')
                 axes1[2].tick_params(axis='both', which='both',
                             bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
                         
                 plt.show()
-                
                 
     def drawMultiLineSegments(self,event,x,y,flags,param):
         if event == cv2.EVENT_LBUTTONDOWN:
@@ -145,15 +212,15 @@ class Module_FRETanalysis(tk.Tk):
                 self.drawNpt = self.drawNpt+1
                 self.polylineX = [ix]
                 self.polylineY = [iy]
-                cv2.circle(self.img, (ix,iy), 2, (0,65536,0))
+                cv2.circle(self.img, (ix,iy), 5, (0,30000,0))
                             
             elif (self.drawNpt > 0) & (self.finishDrawing == False):
                 ix,iy = x,y
                 self.drawNpt = self.drawNpt+1
                 self.polylineX = np.append(self.polylineX,[ix],axis=0)
                 self.polylineY = np.append(self.polylineY,[iy],axis=0)
-                cv2.line(self.img, (self.polylineX[self.drawNpt-2],self.polylineY[self.drawNpt-2]), (ix,iy), (0,65536,0), 1)
-                cv2.circle(self.img, (ix,iy), 2, (0,65536,0))
+                cv2.line(self.img, (self.polylineX[self.drawNpt-2],self.polylineY[self.drawNpt-2]), (ix,iy), (0,30000,0), 3)
+                cv2.circle(self.img, (ix,iy), 5, (0,30000,0))
 
         elif event == cv2.EVENT_RBUTTONDOWN:
             if (self.drawNpt >= 2):
@@ -164,11 +231,12 @@ class Module_FRETanalysis(tk.Tk):
     def step2Button_Click(self):
         if (self.step1Button_Clicked == True):
             self.img = cv2.cvtColor(self.acceptorArray,cv2.COLOR_GRAY2RGB)
-
+            filename = os.path.abspath(self.imgpath) + "/field_of_node_" + self.neuronname + ".png"
             cv2.namedWindow('Acceptor Channel')
             cv2.setMouseCallback('Acceptor Channel',self.drawMultiLineSegments)
             while (self.finishDrawing == False):
                 cv2.imshow('Acceptor Channel',self.img)
+                cv2.imwrite(filename, self.img) 
                 cv2.waitKey(1)
             if (len(self.polylineX) >= 2):
                 self.step2Button_Clicked = True
@@ -188,11 +256,14 @@ class Module_FRETanalysis(tk.Tk):
             Npts = len(self.polylineX)
             fitMode = 0
 
-            newacceptorArray = np.zeros((self.acceptorArray.shape[0],self.acceptorArray.shape[1]), np.uint16)
-            newdonorArray = np.zeros((self.donorArray.shape[0],self.donorArray.shape[1]), np.uint16)
-            newfretArray = np.zeros((self.fretArray.shape[0],self.fretArray.shape[1]), np.uint16)
+            newacceptorArray = np.zeros((self.acceptorArray.shape[0],self.acceptorArray.shape[1]), np.int_)
+            newdonorArray = np.zeros((self.donorArray.shape[0],self.donorArray.shape[1]), np.int_)
+            newfretArray = np.zeros((self.fretArray.shape[0],self.fretArray.shape[1]), np.int_)
             ROIArray = np.zeros((self.acceptorArray.shape[0],self.acceptorArray.shape[1]), np.int_)
 
+            newacceptorDispArray = np.zeros((self.acceptorArray.shape[0],self.acceptorArray.shape[1]), np.int_)
+            newdonorDispArray = np.zeros((self.donorArray.shape[0],self.donorArray.shape[1]), np.int_)
+            newfretDispArray = np.zeros((self.fretArray.shape[0],self.fretArray.shape[1]), np.int_)
 
             whole_xxfit = []
             whole_yyfit = []
@@ -319,13 +390,13 @@ class Module_FRETanalysis(tk.Tk):
                     popt,pcov = curve_fit(self.gauss1Fit,xgaussfit,ygaussfit,bounds=([0,neuronWidth/2,1,0],[1000,neuronWidth*3/2,neuronWidth,100]))
                     if i==0:
                         centerPt = popt[1]
-                        gaussWidth = popt[2]
+                        gaussWidth = popt[2]/2/np.sqrt(2)
                         bkgdVal = popt[3]
                         self.bmean = centerPt
                         self.csigma = gaussWidth
                     else:
                         centerPt = np.append(centerPt,popt[1])
-                        gaussWidth = np.append(gaussWidth,popt[2])
+                        gaussWidth = np.append(gaussWidth,popt[2]/2/np.sqrt(2))
                         bkgdVal = np.append(bkgdVal,popt[3])
                         self.bmean = centerPt[i]
                         self.csigma = gaussWidth[i]
@@ -359,132 +430,125 @@ class Module_FRETanalysis(tk.Tk):
                 whole_bkgdVal = np.append(whole_bkgdVal,bkgdVal)
                 whole_bkgdVal_donor = np.append(whole_bkgdVal_donor,bkgdVal_donor)
                 whole_bkgdVal_fret = np.append(whole_bkgdVal_fret,bkgdVal_fret)
-                
-                
+                              
                 if (fitMode == 1):
                     for i in range(0,len(xxfit)):
                         shiftCPt = np.int_(centerPt[i]-neuronWidth)
                         for ii in range(yyfit[i]-gaussWidth[i]-1+shiftCPt,yyfit[i]+gaussWidth[i]+shiftCPt):
-	                    	pxlInten = np.int_(self.acceptorArray[ii,xxfit[i]-1])-bkgdVal[i]
-	                    	if pxlInten < 0:
-	                        	pxlInten = 0
-	                    	newacceptorArray[ii,xxfit[i]-1] = np.uint16(pxlInten)
+                            newacceptorArray[ii,xxfit[i]-1] = np.int_(np.int_(self.acceptorArray[ii,xxfit[i]-1])-bkgdVal[i])
+                            newacceptorDispArray[ii,xxfit[i]-1] = np.int_(np.int_(self.acceptorArray[ii,xxfit[i]-1])-bkgdVal[i])
 
-	                    	pxlInten_donor = np.int_(self.donorArray[ii,xxfit[i]-1])-bkgdVal_donor[i]
-	                    	if pxlInten_donor < 0:
-	                        	pxlInten_donor = 0
-	                        newdonorArray[ii,xxfit[i]-1] = np.uint16(pxlInten_donor)
+                            newdonorArray[ii,xxfit[i]-1] = np.int_(np.int_(self.donorArray[ii,xxfit[i]-1])-bkgdVal_donor[i])
+                            newdonorDispArray[ii,xxfit[i]-1] = np.int_(np.int_(self.donorArray[ii,xxfit[i]-1])-bkgdVal_donor[i])
 
-	                        pxlInten_fret = np.int_(self.fretArray[ii,xxfit[i]-1])-bkgdVal_fret[i]
-	                        if pxlInten_fret < 0:
-	                            pxlInten_fret = 0
-	                    	newfretArray[ii,xxfit[i]-1] = np.uint16(pxlInten_fret)
-	                    	ROIArray[ii,xxfit[i]-1] = np.int_(1)
-                        newacceptorArray[yyfit[i]-gaussWidth[i]-1+shiftCPt-1,xxfit[i]-1] = np.uint16(2000)
-                        newacceptorArray[yyfit[i]+gaussWidth[i]+shiftCPt,xxfit[i]-1] = np.uint16(2000)
-                        newdonorArray[yyfit[i]-gaussWidth[i]-1+shiftCPt-1,xxfit[i]-1] = np.uint16(2000)
-                        newdonorArray[yyfit[i]+gaussWidth[i]+shiftCPt,xxfit[i]-1] = np.uint16(2000)
-                        newfretArray[yyfit[i]-gaussWidth[i]-1+shiftCPt-1,xxfit[i]-1] = np.uint16(2000)
-                        newfretArray[yyfit[i]+gaussWidth[i]+shiftCPt,xxfit[i]-1] = np.uint16(2000)
+                            newfretArray[ii,xxfit[i]-1] = np.int_(np.int_(self.fretArray[ii,xxfit[i]-1])-bkgdVal_fret[i])
+                            newfretDispArray[ii,xxfit[i]-1] = np.int_(np.int_(self.fretArray[ii,xxfit[i]-1])-bkgdVal_fret[i])
 
-                    
+                            ROIArray[ii,xxfit[i]-1] = np.int_(1)                           
+                        newacceptorDispArray[yyfit[i]-gaussWidth[i]-1+shiftCPt-1,xxfit[i]-1] = np.int_(-1)
+                        newacceptorDispArray[yyfit[i]+gaussWidth[i]+shiftCPt,xxfit[i]-1] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]-gaussWidth[i]-1+shiftCPt-1,xxfit[i]-1] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]+gaussWidth[i]+shiftCPt,xxfit[i]-1] = np.int_(-1)
+                        newfretDispArray[yyfit[i]-gaussWidth[i]-1+shiftCPt-1,xxfit[i]-1] = np.int_(-1)
+                        newfretDispArray[yyfit[i]+gaussWidth[i]+shiftCPt,xxfit[i]-1] = np.int_(-1)
                 elif (fitMode == 2):
                     for i in range(0,len(xxfit)):
                         shiftCPt = np.int_(centerPt[i]-neuronWidth)
                         for ii in range(-gaussWidth[i]-1,gaussWidth[i]+1):
                             pxlInten = np.int_(self.acceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt])-bkgdVal[i]
-                            if pxlInten < 0:
-                                pxlInten = 0                        
-                            newacceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.uint16(pxlInten)
+                            newacceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(pxlInten)
+                            newacceptorDispArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(pxlInten)
 
-                            pxlInten_donor = np.int_(self.donorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt])-bkgdVal_donor[i]
-                            if pxlInten_donor < 0:
-                                pxlInten_donor = 0                        
-                            newdonorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.uint16(pxlInten_donor)
+                            pxlInten_donor = np.int_(self.donorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt])-bkgdVal_donor[i]                       
+                            newdonorArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(pxlInten_donor)
+                            newdonorDispArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(pxlInten_donor)
 
-                            pxlInten_fret = np.int_(self.fretArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt])-bkgdVal_fret[i]
-                            if pxlInten_fret < 0:
-                                pxlInten_fret = 0                        
-                            newfretArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.uint16(pxlInten_fret)
+                            pxlInten_fret = np.int_(self.fretArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt])-bkgdVal_fret[i] 
+                            newfretArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(pxlInten_fret)
+                            newfretDispArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(pxlInten_fret)
+
                             ROIArray[yyfit[i]+ii+shiftCPt,xxfit[i]-ii-shiftCPt] = np.int_(1)
-                        newacceptorArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]+gaussWidth[i]+2-shiftCPt] = np.uint16(2000)
-                        newacceptorArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]-gaussWidth[i]-1-shiftCPt] = np.uint16(2000)
-                        newdonorArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]+gaussWidth[i]+2-shiftCPt] = np.uint16(2000)
-                        newdonorArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]-gaussWidth[i]-1-shiftCPt] = np.uint16(2000)
-                        newfretArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]+gaussWidth[i]+2-shiftCPt] = np.uint16(2000)
-                        newfretArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]-gaussWidth[i]-1-shiftCPt] = np.uint16(2000)
-
+                        newacceptorDispArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]+gaussWidth[i]+2-shiftCPt] = np.int_(-1)
+                        newacceptorDispArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]-gaussWidth[i]-1-shiftCPt] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]+gaussWidth[i]+2-shiftCPt] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]-gaussWidth[i]-1-shiftCPt] = np.int_(-1)
+                        newfretDispArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]+gaussWidth[i]+2-shiftCPt] = np.int_(-1)
+                        newfretDispArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]-gaussWidth[i]-1-shiftCPt] = np.int_(-1)
                 elif (fitMode == 3):
                     for i in range(0,len(xxfit)):
                         shiftCPt = np.int_(centerPt[i]-neuronWidth)
                         for ii in range(-gaussWidth[i]-1,gaussWidth[i]+1):
-                            pxlInten = np.int_(self.acceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt])-bkgdVal[i]
-                            if pxlInten < 0:
-                                pxlInten = 0                        
-                            newacceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.uint16(pxlInten)
+                            pxlInten = np.int_(self.acceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt])-bkgdVal[i]                     
+                            newacceptorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(pxlInten)
+                            newacceptorDispArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(pxlInten)
 
-                            pxlInten_donor = np.int_(self.donorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt])-bkgdVal_donor[i]
-                            if pxlInten_donor < 0:
-                                pxlInten_donor = 0                        
-                            newdonorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.uint16(pxlInten_donor)
+                            pxlInten_donor = np.int_(self.donorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt])-bkgdVal_donor[i]                       
+                            newdonorArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(pxlInten_donor)
+                            newdonorDispArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(pxlInten_donor)
 
-                            pxlInten_fret = np.int_(self.fretArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt])-bkgdVal_fret[i]
-                            if pxlInten_fret < 0:
-                                pxlInten_fret = 0                        
-                            newfretArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.uint16(pxlInten_fret)
+                            pxlInten_fret = np.int_(self.fretArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt])-bkgdVal_fret[i]                       
+                            newfretArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(pxlInten_fret)
+                            newfretDispArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(pxlInten_fret)
 
                             ROIArray[yyfit[i]+ii+shiftCPt,xxfit[i]+ii+shiftCPt] = np.int_(1)
-                        newacceptorArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]-gaussWidth[i]-2+shiftCPt] = np.uint16(2000)
-                        newacceptorArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]+gaussWidth[i]+1+shiftCPt] = np.uint16(2000)
-                        newdonorArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]-gaussWidth[i]-2+shiftCPt] = np.uint16(2000)
-                        newdonorArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]+gaussWidth[i]+1+shiftCPt] = np.uint16(2000)
-                        newfretArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]-gaussWidth[i]-2+shiftCPt] = np.uint16(2000)
-                        newfretArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]+gaussWidth[i]+1+shiftCPt] = np.uint16(2000)
-                    
+                        newacceptorDispArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]-gaussWidth[i]-2+shiftCPt] = np.int_(-1)
+                        newacceptorDispArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]+gaussWidth[i]+1+shiftCPt] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]-gaussWidth[i]-2+shiftCPt] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]+gaussWidth[i]+1+shiftCPt] = np.int_(-1)
+                        newfretDispArray[yyfit[i]-gaussWidth[i]-2+shiftCPt,xxfit[i]-gaussWidth[i]-2+shiftCPt] = np.int_(-1)
+                        newfretDispArray[yyfit[i]+gaussWidth[i]+1+shiftCPt,xxfit[i]+gaussWidth[i]+1+shiftCPt] = np.int_(-1)                
                 elif (fitMode == 4):
                     for i in range(0,len(xxfit)):
                         shiftCPt = np.int_(centerPt[i]-neuronWidth)
                         for ii in range(xxfit[i]-gaussWidth[i]-1+shiftCPt,xxfit[i]+gaussWidth[i]+shiftCPt):
-	                        pxlInten = np.int_(self.acceptorArray[yyfit[i]-1,ii])-bkgdVal[i]
-	                        if pxlInten < 0:
-	                            pxlInten = 0                        
-	                        newacceptorArray[yyfit[i]-1,ii] = np.uint16(pxlInten)
+                            newacceptorArray[yyfit[i]-1,ii] = np.int_(np.int_(self.acceptorArray[yyfit[i]-1,ii])-bkgdVal[i])
+                            newacceptorDispArray[yyfit[i]-1,ii] = np.int_(np.int_(self.acceptorArray[yyfit[i]-1,ii])-bkgdVal[i])
 
-	                        pxlInten_donor = np.int_(self.donorArray[yyfit[i]-1,ii])-bkgdVal_donor[i]
-	                        if pxlInten_donor < 0:
-	                            pxlInten_donor = 0                        
-	                        newdonorArray[yyfit[i]-1,ii] = np.uint16(pxlInten_donor)
+                            newdonorArray[yyfit[i]-1,ii] = np.uint16(np.int_(self.donorArray[yyfit[i]-1,ii])-bkgdVal_donor[i])
+                            newdonorDispArray[yyfit[i]-1,ii] = np.uint16(np.int_(self.donorArray[yyfit[i]-1,ii])-bkgdVal_donor[i])
+                            
+                            newfretArray[yyfit[i]-1,ii] = np.uint16(np.int_(self.fretArray[yyfit[i]-1,ii])-bkgdVal_fret[i])
+                            newfretDispArray[yyfit[i]-1,ii] = np.uint16(np.int_(self.fretArray[yyfit[i]-1,ii])-bkgdVal_fret[i])
 
-	                        pxlInten_fret = np.int_(self.fretArray[yyfit[i]-1,ii])-bkgdVal_fret[i]
-	                        if pxlInten_fret < 0:
-	                            pxlInten_fret = 0                        
-	                        newfretArray[yyfit[i]-1,ii] = np.uint16(pxlInten_fret)
-                        	ROIArray[yyfit[i]-1,ii] = np.int_(np.repeat(1,len(ii)))
-                        newacceptorArray[yyfit[i]-1,xxfit[i]-gaussWidth[i]-1+shiftCPt-1] = np.uint16(2000)
-                        newacceptorArray[yyfit[i]-1,xxfit[i]+gaussWidth[i]+shiftCPt] = np.uint16(2000)
-                        newdonorArray[yyfit[i]-1,xxfit[i]-gaussWidth[i]-1+shiftCPt-1] = np.uint16(2000)
-                        newdonorArray[yyfit[i]-1,xxfit[i]+gaussWidth[i]+shiftCPt] = np.uint16(2000)
-                        newfretArray[yyfit[i]-1,xxfit[i]-gaussWidth[i]-1+shiftCPt-1] = np.uint16(2000)
-                        newfretArray[yyfit[i]-1,xxfit[i]+gaussWidth[i]+shiftCPt] = np.uint16(2000)
-
-                
-            imgfig2,axes2 = plt.subplots(2,4)
-            # imgfig2,axes2 = plt.subplots(2,3)
-            imgfig2.canvas.set_window_title('Images after ROI selection and background substraction')
+                            ROIArray[yyfit[i]-1,ii] = np.int_(np.repeat(1,len(ii)))
+                        newacceptorDispArray[yyfit[i]-1,xxfit[i]-gaussWidth[i]-1+shiftCPt-1] = np.int_(-1)
+                        newacceptorDispArray[yyfit[i]-1,xxfit[i]+gaussWidth[i]+shiftCPt] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]-1,xxfit[i]-gaussWidth[i]-1+shiftCPt-1] = np.int_(-1)
+                        newdonorDispArray[yyfit[i]-1,xxfit[i]+gaussWidth[i]+shiftCPt] = np.int_(-1)
+                        newfretDispArray[yyfit[i]-1,xxfit[i]-gaussWidth[i]-1+shiftCPt-1] = np.int_(-1)
+                        newfretDispArray[yyfit[i]-1,xxfit[i]+gaussWidth[i]+shiftCPt] = np.int_(-1)
 
             a1 = np.int_(np.amin(whole_yyfit)-5)
             a2 = np.int_(np.amax(whole_yyfit)+5)
             b1 = np.int_(np.amin(whole_xxfit)-5)
             b2 = np.int_(np.amax(whole_xxfit)+5)
-               
-
             tempcropdonorArray = newdonorArray[range(a1,a2),:]
             self.cropdonorArray = tempcropdonorArray[:,range(b1,b2)]
+            tempcropacceptorArray = newacceptorArray[range(a1,a2),:]
+            self.cropacceptorArray = tempcropacceptorArray[:,range(b1,b2)]
+            tempcropfretArray = newfretArray[range(a1,a2),:]
+            self.cropfretArray = tempcropfretArray[:,range(b1,b2)]
 
+            tempcropdonorDispArray = newdonorDispArray[range(a1,a2),:]
+            cropdonorDispArray = tempcropdonorDispArray[:,range(b1,b2)]
+            cropdonorDispArray[cropdonorDispArray<0] = np.max(cropdonorDispArray)+(np.max(cropdonorDispArray)-np.min(cropdonorDispArray))/3
+            tempcropacceptorDispArray = newacceptorDispArray[range(a1,a2),:]
+            cropacceptorDispArray = tempcropacceptorDispArray[:,range(b1,b2)]
+            cropacceptorDispArray[cropacceptorDispArray<0] = np.max(cropacceptorDispArray)+(np.max(cropacceptorDispArray)-np.min(cropacceptorDispArray))/3
+            tempcropfretDispArray = newfretDispArray[range(a1,a2),:]
+            cropfretDispArray = tempcropfretDispArray[:,range(b1,b2)]
+            cropfretDispArray[cropfretDispArray<0] = np.max(cropfretDispArray)+(np.max(cropfretDispArray)-np.min(cropfretDispArray))/3
+            tempROIArray = ROIArray[range(a1,a2),:]
+            self.cropROIArray = tempROIArray[:,range(b1,b2)]
+            cropROIDispArray = np.uint8(self.cropROIArray*255)
+
+
+            imgfig2,axes2 = plt.subplots(2,4)
+            imgfig2.canvas.set_window_title('Images after ROI selection and background substraction')           
             
-            im4 = axes2[0,0].imshow(self.cropdonorArray, cmap = 'nipy_spectral')
-            cbar4 = imgfig2.colorbar(im4, ax=axes2[0,0],orientation='horizontal')
-            cbar4.ax.set_xticklabels(cbar4.ax.get_xticklabels(),rotation=90)
+            im21 = axes2[0,0].imshow(np.uint16(cropdonorDispArray), cmap = 'nipy_spectral')
+            cbar21 = imgfig2.colorbar(im21, ax=axes2[0,0],orientation='horizontal')
+            cbar21.ax.set_xticklabels(cbar21.ax.get_xticklabels(),rotation=90)
             axes2[0,0].set_title('Donor Channel')
             axes2[0,0].tick_params(axis='both', which='both',
                         bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
@@ -492,39 +556,26 @@ class Module_FRETanalysis(tk.Tk):
             axes2[1,0].plot(whole_bkgdVal_donor)
             axes2[1,0].set_title('Donor Bkgd Level')
             
-            tempcropacceptorArray = newacceptorArray[range(a1,a2),:]
-            self.cropacceptorArray = tempcropacceptorArray[:,range(b1,b2)]
-
             
-            im5 = axes2[0,1].imshow(self.cropacceptorArray, cmap = 'nipy_spectral')
-            cbar5 = imgfig2.colorbar(im5, ax=axes2[0,1],orientation='horizontal')
-            cbar5.ax.set_xticklabels(cbar5.ax.get_xticklabels(),rotation=90)
+            im22 = axes2[0,1].imshow(np.uint16(cropacceptorDispArray), cmap = 'nipy_spectral')
+            cbar22 = imgfig2.colorbar(im22, ax=axes2[0,1],orientation='horizontal')
+            cbar22.ax.set_xticklabels(cbar22.ax.get_xticklabels(),rotation=90)
             axes2[0,1].set_title('Acceptor Channel')
             axes2[0,1].tick_params(axis='both', which='both',
                         bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
 
             axes2[1,1].plot(whole_bkgdVal)
             axes2[1,1].set_title('Acceptor Bkgd Level')
-
-            
-            tempcropfretArray = newfretArray[range(a1,a2),:]
-            self.cropfretArray = tempcropfretArray[:,range(b1,b2)]
-
                 
-            im6 = axes2[0,2].imshow(self.cropfretArray, cmap = 'nipy_spectral')
-            cbar6 = imgfig2.colorbar(im6, ax=axes2[0,2],orientation='horizontal')
-            cbar6.ax.set_xticklabels(cbar6.ax.get_xticklabels(),rotation=90)
+            im23 = axes2[0,2].imshow(np.uint16(cropfretDispArray), cmap = 'nipy_spectral')
+            cbar23 = imgfig2.colorbar(im23, ax=axes2[0,2],orientation='horizontal')
+            cbar23.ax.set_xticklabels(cbar23.ax.get_xticklabels(),rotation=90)
             axes2[0,2].set_title('FRET Channel')
             axes2[0,2].tick_params(axis='both', which='both',
                             bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
 
             axes2[1,2].plot(whole_bkgdVal_fret)
-            axes2[1,2].set_title('FRET Bkgd Level')
-
-
-            tempROIArray = ROIArray[range(a1,a2),:]
-            self.cropROIArray = tempROIArray[:,range(b1,b2)]
-            cropROIDispArray = np.uint8(self.cropROIArray*255)
+            axes2[1,2].set_title('FRET Bkgd Level')          
 
             axes2[0,3].imshow(cropROIDispArray, cmap = 'gray')
             axes2[0,3].set_title('ROI')
@@ -535,16 +586,14 @@ class Module_FRETanalysis(tk.Tk):
             axes2[1,3].set_title('ROI Width')
                             
             self.step3Button_Clicked = True
-            
-            plt.show()
-                
-                
+            print("Finished step3")
+            plt.show()               
                 
     def step4Button_Click(self):
         if (self.step3Button_Clicked == True):
             textFile = open(os.path.abspath(self.imgpath) + "/Parameter.txt", "r")
             data = textFile.readlines()
-            para = np.zeros(2,np.float_)
+            para = np.zeros(7,np.float_)
             count = 0
             for line in data:
                 words = line.split()
@@ -557,75 +606,194 @@ class Module_FRETanalysis(tk.Tk):
             cropfretArrayVal = np.float_(self.cropfretArray)
 
             cF = cropfretArrayVal - para[0]*cropdonorArrayVal/100 - para[1]*cropacceptorArrayVal/100
-            for i in range(0,cF.shape[0]):
-                for j in range(0,cF.shape[1]):
-                    if (cF[i,j] < 0) | (self.cropROIArray[i,j] == 0):
-                        cF[i,j] = 0
 
             E = np.zeros((cF.shape[0],cF.shape[1]), np.float_)
             qD = cropdonorArrayVal
-            Q_D = 0.85
-            gainDARatio = 1.15
+            Q_D = para[2]
+            gainDARatio = para[3]
             for i in range(0,cF.shape[0]):
                 for j in range(0,cF.shape[1]):
-                    if (qD[i,j] != 0) & (cF[i,j] != 0):
+                    if (qD[i,j]+cF[i,j]*Q_D*gainDARatio != 0) & (self.cropROIArray[i,j] == 1):
                         E[i,j] = 100*(cF[i,j]*Q_D*gainDARatio)/(qD[i,j]+cF[i,j]*Q_D*gainDARatio)
+                    if (qD[i,j]+cF[i,j]*Q_D*gainDARatio == 0) & (self.cropROIArray[i,j] == 1):
+                        E[i,j] = np.inf
+                        if cF[i,j]<0:
+                            E[i,j] = -np.inf
 
             listCount = 0
             donorList = np.zeros(self.cropROIArray.sum())
             acceptorList = np.zeros(self.cropROIArray.sum())
             fretList = np.zeros(self.cropROIArray.sum())
+            EList = np.zeros(self.cropROIArray.sum())
             for i in range(0,cF.shape[0]):
                 for j in range(0,cF.shape[1]):
                     if (self.cropROIArray[i,j] == 1):
                         donorList[listCount] = cropdonorArrayVal[i,j]
                         acceptorList[listCount] = cropacceptorArrayVal[i,j]
                         fretList[listCount] = cropfretArrayVal[i,j]
+                        EList[listCount] = E[i,j]
                         listCount = listCount + 1
 
-            donorSigma = np.float_(np.std(donorList))
-            acceptorSigma = np.float_(np.std(acceptorList))
-            fretSigma = np.float_(np.std(fretList))
+            donorSigma = para[4]
+            acceptorSigma = para[5]
+            fretSigma = para[6]
 
-            cFSigma = np.float_(np.sqrt(fretSigma**2 + (para[0]*donorSigma)**2 + (para[1]*acceptorSigma)**2))
+            listCount = 0
+            ESigmaList = np.zeros(self.cropROIArray.sum())
+            cFSigma = np.float_(np.sqrt((cropfretArrayVal*fretSigma)**2 + (para[0]*cropdonorArrayVal*donorSigma)**2 + (para[1]*cropacceptorArrayVal*acceptorSigma)**2))
             ESigma = np.zeros((cF.shape[0],cF.shape[1]), np.float_)
             for i in range(0,cF.shape[0]):
                 for j in range(0,cF.shape[1]):
-                    if (cF[i,j] != 0):
+                    if (cF[i,j] == 0) | ((cF[i,j] != 0) & (np.isinf(E[i,j])==True)):
+                        ESigma[i,j] = np.inf
+                    if (cF[i,j] != 0) & (np.isinf(E[i,j])==False):
                         A = np.square(np.divide(E[i,j]/100,cF[i,j]*Q_D*gainDARatio))
-                        B = np.sqrt((cF[i,j]*Q_D*gainDARatio*donorSigma)**2 + (qD[i,j]*Q_D*gainDARatio*cFSigma)**2)
+                        B = np.sqrt((cF[i,j]*Q_D*gainDARatio*donorSigma)**2 + (qD[i,j]*Q_D*gainDARatio*cFSigma[i,j])**2)
                         ESigma[i,j] = A*B
-            print (np.amax(ESigma))
+                    if (self.cropROIArray[i,j] == 1):
+                        ESigmaList[listCount] = ESigma[i,j]
+                        listCount = listCount + 1
 
-
-            imgfig3,axes3 = plt.subplots(1,3)
-            imgfig3.canvas.set_window_title('FRET Calculation')
-                           
-            im7 = axes3[0].imshow(np.uint16(cF), cmap = 'nipy_spectral')
-            cbar7 = imgfig3.colorbar(im7, ax=axes3[0],orientation='horizontal')
-            cbar7.ax.set_xticklabels(cbar7.ax.get_xticklabels(),rotation=90)
-            axes3[0].set_title('FRET Signal')
-            axes3[0].tick_params(axis='both', which='both',
-                        bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
-
-            im8 = axes3[1].imshow(np.uint16(E), cmap = 'nipy_spectral')
-            cbar8 = imgfig3.colorbar(im8, ax=axes3[1],orientation='horizontal')
-            cbar8.ax.set_xticklabels(cbar8.ax.get_xticklabels(),rotation=90)
-            axes3[1].set_title('FRET Efficiency')
-            axes3[1].tick_params(axis='both', which='both',
-                        bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
-
-            im9 = axes3[2].imshow(np.uint16(ESigma), cmap = 'nipy_spectral')
-            cbar9 = imgfig3.colorbar(im9, ax=axes3[2],orientation='horizontal')
-            cbar9.ax.set_xticklabels(cbar9.ax.get_xticklabels(),rotation=90)
-            axes3[2].set_title('Uncertainty')
-            axes3[2].tick_params(axis='both', which='both',
-                        bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
+            self.EList = EList
+            self.ESigmaList = ESigmaList
+            self.acceptorList = acceptorList
+            self.cF = cF
+            self.E = E
+            self.ESigma = ESigma
             
             self.step4Button_Clicked = True
-            plt.show()
+            print("Finished step4")
 
-    
+    def step5Button_Click(self):
+        def getKey(item):
+            return item[0]
+        if (self.step4Button_Clicked == True):
+            k = 0
+            for i in range(0,len(self.ESigmaList)):
+                if self.ESigmaList[i]<1e308:
+                    if k==0:
+                        newESigmaList = self.ESigmaList[i]
+                    else:
+                        newESigmaList = np.append(newESigmaList,self.ESigmaList[i])
+                    k = k+1
+            ESigma_mad = np.float_(median_absolute_deviation(newESigmaList))
+            ESigma_median = np.float_(np.median(newESigmaList))
+            numCertain = 0
+            listcount = 0
+            for ii in range(0,self.cropROIArray.sum()):
+                if (self.ESigmaList[ii] > ESigma_median-ESigma_mad) & (self.ESigmaList[ii] < ESigma_median+ESigma_mad):
+                	numCertain = numCertain + 1
+                	if (self.acceptorList[ii] > 50):
+	                    if listcount == 0:
+	                        newacceptorEList = [[self.acceptorList[ii],self.EList[ii],self.ESigmaList[ii]]]
+	                    else:
+	                        newacceptorEList = np.append(newacceptorEList,[[self.acceptorList[ii],self.EList[ii],self.ESigmaList[ii]]],axis=0)
+	                    listcount = listcount + 1
+
+            sortaEList = np.asarray(sorted(newacceptorEList, key=getKey))
+            E_avg = np.mean(sortaEList[:,1])
+            E_median = np.median(sortaEList[:,1])
+            ESigma_avg = np.mean(sortaEList[:,2])
+            aECalArray = []
+            windowSize = 30
+            windowCount = 0
+            while (windowCount+windowSize < listcount):
+                if windowCount == 0:
+                    aECalArrayBin = (sortaEList[windowCount,0]+sortaEList[windowCount+windowSize,0])/2
+                    aECalArray = np.mean(sortaEList[range(windowCount,windowCount+windowSize),1])
+                else:
+                    windowval_mean = np.mean(sortaEList[range(windowCount,windowCount+windowSize),1])
+                    aECalArrayBin = np.append(aECalArrayBin,(sortaEList[windowCount,0]+sortaEList[windowCount+windowSize,0])/2)
+                    aECalArray = np.append(aECalArray,windowval_mean)
+                windowCount = windowCount + windowSize
+            NSig = 3
+            cFDispArray = self.cF
+            cFDispArray[cFDispArray > 2000] = 2000
+            cFDispArray[cFDispArray < 0] = 2000
+            EDispArray = self.E
+            EDispArray[EDispArray > 100] = 120
+            EDispArray[EDispArray < 0] = 120
+            ESigmaDispArray = self.ESigma
+            ESigmaDispArray[ESigmaDispArray > ESigma_median+NSig*ESigma_mad] = ESigma_median+(NSig+1)*ESigma_mad
+            ESigmaDispArray[ESigmaDispArray < 0] = ESigma_median+(NSig+1)*ESigma_mad
+
+            self.result1Str.set(u"%2.1f" %E_median)
+            self.result2Str.set(u"%2.1f" %E_avg)
+            self.result3Str.set(u"%5.0f" %self.cropROIArray.sum())
+            numUncertain = self.cropROIArray.sum()-numCertain
+            self.result4Str.set(u"%5.0f" %numUncertain)
+            self.result5Str.set(u"%2.1f" %ESigma_avg)
+            self.result6Str.set(u"%5.0f" %listcount)
+
+
+            textFile = open(os.path.abspath(self.imgpath) + "/field_of_node_" + self.neuronname + ".txt", "w")
+            textFile.write("Median of FRET efficiency: %2.1f\n" %E_median)
+            textFile.write("Mean of FRET efficiency: %2.1f\n" %E_avg)
+            textFile.write("Total # of pixels in ROI: %5.0f\n" %self.cropROIArray.sum())
+            textFile.write("# of uncertain pixels: %5.0f\n" %numUncertain)
+            textFile.write("Average of uncertainty: %2.1f\n" %ESigma_avg)
+            textFile.write("# of pixels in final quantification: %5.0f\n" %listcount)
+            textFile.close()
+
+
+            imgfig3,axes3 = plt.subplots(2,3)
+            imgfig3.canvas.set_window_title('FRET Characterization')
+                                       
+            im31 = axes3[0,0].imshow(np.uint16(cFDispArray), cmap = 'nipy_spectral')
+            cbar31 = imgfig3.colorbar(im31, ax=axes3[0,0],orientation='horizontal')
+            cbar31.ax.set_xticklabels(cbar31.ax.get_xticklabels(),rotation=90)
+            axes3[0,0].set_title('FRET Signal')
+            axes3[0,0].tick_params(axis='both', which='both',
+                        bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
+
+            im32 = axes3[0,1].imshow(np.uint16(EDispArray), cmap = 'nipy_spectral')
+            cbar32 = imgfig3.colorbar(im32, ax=axes3[0,1],orientation='horizontal')
+            cbar32.ax.set_xticklabels(cbar32.ax.get_xticklabels(),rotation=90)
+            axes3[0,1].set_title('FRET Efficiency')
+            axes3[0,1].tick_params(axis='both', which='both',
+                        bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
+
+            im33 = axes3[0,2].imshow(np.uint16(ESigmaDispArray), cmap = 'nipy_spectral')
+            cbar33 = imgfig3.colorbar(im33, ax=axes3[0,2],orientation='horizontal')
+            cbar33.ax.set_xticklabels(cbar33.ax.get_xticklabels(),rotation=90)
+            axes3[0,2].set_title('Uncertainty')
+            axes3[0,2].tick_params(axis='both', which='both',
+                        bottom='off', top='off', labelbottom='off', right='off', left='off', labelleft='off')
+
+            aplot = sortaEList[:,0]
+            eplot = sortaEList[:,1]
+            uplot = sortaEList[:,2]
+
+            axes3[1,0].scatter(np.float_(uplot),np.float_(eplot), s = 5)
+            axes3[1,0].set_title('FRET Efficiency V.S Uncertainty')
+            axes3[1,0].set_xlabel('Uncertainty')
+            axes3[1,0].set_ylabel('FRET Efficiency')
+            axes3[1,0].set_xlim(0, 1000)
+            axes3[1,0].set_ylim(0, 100)
+            
+            # colorList = (np.float_(self.ESigmaList)-(np.float_(ESigma_median)-NSig*ESigma_mad))/(ESigma_mad*NSig)
+            # colorList[colorList>1] = 2
+            # colorList[colorList<0] = 2
+
+            # axes3[1,1].scatter(np.float_(self.acceptorList),np.float_(self.EList), c = colorList, s = 5, cmap=cm.jet)
+            axes3[1,1].scatter(np.float_(aplot),np.float_(eplot), c = np.int_(uplot), s = 5, cmap=cm.jet)
+            axes3[1,1].plot(aECalArrayBin,aECalArray, 'k-')
+            axes3[1,1].set_title('FRET Efficiency V.S Acceptor')
+            axes3[1,1].set_xlabel('Acceptor')
+            axes3[1,1].set_ylabel('FRET Efficiency')
+            axes3[1,1].set_xlim(0, 1350)
+            axes3[1,1].set_ylim(0, 100)
+
+            
+            axes3[1,2].scatter(np.float_(aplot),np.float_(uplot), s = 5)
+            axes3[1,2].set_title('Uncertainty V.S Acceptor')
+            axes3[1,2].set_xlabel('Acceptor')
+            axes3[1,2].set_ylabel('Uncertainty')
+            axes3[1,2].set_ylim(0, 1000)
+
+            self.step5Button_Clicked = True
+            plt.show()
+            
     
 if __name__ == "__main__":
     FRETapp = Module_FRETanalysis(None)
